@@ -1,0 +1,42 @@
+---
+- name: Playbook to password protect grubv2
+  hosts: all
+  vars_files: ./vault.yml
+
+  tasks:
+
+    - name: Add superuser & password hash to /etc/grub.d/40_custom
+      ansible.builtin.blockinfile:
+        path: /etc/grub.d/40_custom
+        marker: "##<!-- {mark} ANSIBLE MANAGED BLOCK -->##"
+        insertafter: EOF
+        mode: '0755'
+        owner: root
+        group: root
+        block: |
+          set superusers="{{ superuser | quote }}"
+          password_pbkdf2 {{ superuser }} {{ secret }}
+
+        create: true
+        backup: true
+      tags:
+        - conf
+
+    - name: Change default superuser for grub
+      ansible.builtin.lineinfile:
+        path: /etc/grub.d/01_users
+        regexp: '\s\s\s\sset\ssuperusers*'
+        line: '    set superusers="{{ superuser | quote }}"'
+      tags:
+        - conf
+
+    - name: Change default superuser for grub (2)
+      ansible.builtin.lineinfile:
+        path: /etc/grub.d/01_users
+        regexp: '\s\s\s\spassword_pbkdf2*'
+        line: '    password_pbkdf2 {{ superuser }} \${GRUB2_PASSWORD}'
+      tags:
+        - conf
+
+    - name: Create grub config
+      ansible.builtin.command: grub2-mkconfig -o /boot/efi/EFI/redhat/grub.cfg
